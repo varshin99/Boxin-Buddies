@@ -1,0 +1,71 @@
+
+if exists(select * from INFORMATION_SCHEMA.TABLE_CONSTRAINTS )
+    alter table packages drop CONSTRAINT fk_pack_user_id,CONSTRAINT fk_pack_trav_user_id,CONSTRAINT fk_pack_type_id,
+        CONSTRAINT fk_pack_pickup_addres_id,CONSTRAINT fk_pack_drop_addres_id,CONSTRAINT fk_pack_traveller_id,CONSTRAINT fk_pack_payment_id
+
+if exists(select * from INFORMATION_SCHEMA.TABLE_CONSTRAINTS )
+    alter table travellers drop CONSTRAINT fk_travellers_trav_usesr_id ,CONSTRAINT fk_trav_start_addres_id,
+                CONSTRAINT fk_trav_destination_addres_id ,CONSTRAINT fk_trav_traveller_availability_id
+
+ALTER table payments drop CONSTRAINT fk_payments_packages_id,CONSTRAINT fk_payments_traveller_id,
+                            CONSTRAINT fk_payments_user_id 
+
+alter TABLE traveller_availability drop CONSTRAINT  fk_traveller_trave_id
+
+alter TABLE package_type drop CONSTRAINT   fk_packages_type_pack_id
+
+alter table rating drop CONSTRAINT fk_rating_user_id ,CONSTRAINT fk_rating_traveller_user_id ,CONSTRAINT fk_raing_rating_for_traveller_id
+
+alter table locations drop constraint  fk_locations_user_id , CONSTRAINT fk_loacations_traveller_user_id,
+                            CONSTRAINT fk_locations_traveller_id,CONSTRAINT fk_locations_packages_id
+
+go 
+
+ALTER table packages 
+ ADD     CONSTRAINT fk_pack_user_id  FOREIGN key (user_id) REFERENCES users(user_id),
+    CONSTRAINT fk_pack_trav_user_id  FOREIGN key (traveller_user_id) REFERENCES users(user_id),
+    CONSTRAINT fk_pack_type_id  FOREIGN key (package_type_id) REFERENCES package_type(package_type_id),   
+    CONSTRAINT fk_pack_pickup_addres_id  FOREIGN key (package_pickup_address_id) REFERENCES locations(address_id),
+    CONSTRAINT fk_pack_drop_addres_id  FOREIGN key (package_delivery_address_id) REFERENCES locations(address_id),
+    CONSTRAINT fk_pack_traveller_id  FOREIGN key (traveller_id) REFERENCES travellers(traveller_id),
+    CONSTRAINT fk_pack_payment_id   FOREIGN key (payment_id) REFERENCES payments(payment_id)
+
+go 
+
+alter TABLE travellers
+add     CONSTRAINT fk_travellers_trav_usesr_id  FOREIGN key (user_id) REFERENCES users(user_id),
+    CONSTRAINT fk_trav_start_addres_id  FOREIGN key (traveller_starting_address_id) REFERENCES locations(address_id),
+    CONSTRAINT fk_trav_destination_addres_id  FOREIGN key (traveller_destination_address_id) REFERENCES locations(address_id),
+    CONSTRAINT fk_trav_traveller_availability_id FOREIGN key (traveller_availability_id) REFERENCES traveller_availability(traveller_availability_id)
+
+go 
+
+alter table payments
+add     CONSTRAINT fk_payments_packages_id FOREIGN key (package_id ) REFERENCES packages(package_id),
+    CONSTRAINT fk_payments_traveller_id  FOREIGN key (traveller_id) REFERENCES travellers(traveller_id),
+    CONSTRAINT fk_payments_user_id  FOREIGN key (user_id) REFERENCES users(user_id)
+
+go 
+
+alter table traveller_availability
+add     CONSTRAINT fk_traveller_trave_id  FOREIGN key (traveller_id) REFERENCES travellers(traveller_id)
+
+go 
+
+alter table package_type
+add     CONSTRAINT fk_packages_type_pack_id  FOREIGN key (package_id) REFERENCES packages(package_id)
+
+go 
+
+alter table rating 
+add     CONSTRAINT fk_rating_user_id  FOREIGN key (user_id) REFERENCES users(user_id),
+    CONSTRAINT fk_rating_traveller_user_id  FOREIGN key (traveller_user_id) REFERENCES users(user_id),
+    CONSTRAINT fk_raing_rating_for_traveller_id FOREIGN key (rating_for_traveller_id) REFERENCES travellers(traveller_id)
+go 
+alter table locations 
+
+add     CONSTRAINT fk_locations_user_id  FOREIGN key (user_id) REFERENCES users(user_id),
+    CONSTRAINT fk_loacations_traveller_user_id  FOREIGN key (traveller_user_id) REFERENCES users(user_id),
+    CONSTRAINT fk_locations_traveller_id FOREIGN key (traveller_id) REFERENCES travellers(traveller_id),
+    CONSTRAINT fk_locations_packages_id FOREIGN key (package_id) REFERENCES packages(package_id)
+go 

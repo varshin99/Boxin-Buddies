@@ -1,0 +1,338 @@
+
+dROP TRIGGER IF EXISTS trig_pack_trav_address_id
+GO
+CREATE TRIGGER trig_pack_trav_address_id on locations 
+after  INSERT 
+AS
+    BEGIN
+            begin try 
+        begin TRANSACTION
+        UPDATE packages 
+        set packages.package_pickup_address_id=inserted.address_id
+        FROM inserted
+        WHERE packages.package_id= inserted.package_id and inserted.address_type ='Package Pick-up address'
+
+        UPDATE packages 
+        set packages.package_delivery_address_id=inserted.address_id
+        FROM inserted
+        WHERE packages.package_id= inserted.package_id and inserted.address_type ='Package Delivery address'
+
+        UPDATE travellers 
+        set travellers.traveller_starting_address_id=inserted.address_id
+        FROM inserted
+        WHERE travellers.traveller_id= inserted.package_id and inserted.address_type ='Traveller starting address'
+
+        UPDATE travellers 
+        set travellers.traveller_destination_address_id=inserted.address_id
+        FROM inserted
+        WHERE travellers.traveller_id= inserted.package_id and inserted.address_type ='Traveller destion address'
+        commit 
+        end try 
+        begin CATCH
+        ROLLBACK;
+        THROW
+        end catch 
+
+    END
+go 
+
+
+------------------------------------------
+
+
+dROP TRIGGER IF EXISTS pack_packa_type_id
+GO
+CREATE TRIGGER pack_packa_type_id on package_type 
+after  INSERT 
+AS
+    BEGIN
+        begin try 
+        begin TRANSACTION
+        UPDATE packages 
+        set packages.package_type_id=inserted.package_type_id
+        FROM inserted
+        WHERE packages.package_id= inserted.package_id 
+        commit 
+        end try 
+        begin CATCH
+        ROLLBACK;
+        THROW
+        end catch 
+    END
+GO
+
+------------------------------
+
+dROP TRIGGER IF EXISTS trav_avail_id
+GO
+CREATE TRIGGER trav_avail_id on traveller_availability 
+after  INSERT 
+AS
+    BEGIN
+        begin try 
+        begin TRANSACTION
+        UPDATE traveller 
+        set traveller.traveller_availability_id=inserted.traveller_availability_id
+        FROM inserted
+        WHERE traveller.traveller_id= inserted.traveller_id 
+        commit 
+        end try 
+        begin CATCH
+        ROLLBACK;
+        THROW
+        end catch 
+    END
+GO
+
+----------------------
+drop view if  exists avg_rating_by_trav 
+go 
+create view avg_rating_by_trav  as 
+select traveller_user_id,AVG(raitng) as trav_rating
+from rating
+GROUP by traveller_user_id
+
+GO
+
+dROP TRIGGER IF EXISTS trav_avg_rating
+GO
+CREATE TRIGGER trav_avg_rating on rating 
+after  INSERT 
+AS
+    BEGIN
+        begin try 
+        begin TRANSACTION
+        declare @travelleruserid VARCHAR(100)
+
+         set @travelleruserid=  (select inserted.traveller_user_id from inserted )
+
+        UPDATE users 
+        set users.traveller_avg_rating= avg_rating_by_trav.trav_rating
+        FROM avg_rating_by_trav
+        WHERE  users.user_id = @travelleruserid
+        commit 
+        end try 
+        begin CATCH
+        ROLLBACK;
+        THROW
+        end catch 
+    END
+GO
+
+--------------------------
+
+
+------------------------------
+
+dROP TRIGGER IF EXISTS payment_pack_payment_id
+GO
+CREATE TRIGGER payment_pack_payment_id on packages 
+after  INSERT 
+AS
+    BEGIN
+        begin try 
+        begin TRANSACTION
+        UPDATE packages 
+        set packages.payment_id=inserted.payment_id, 
+            packages.package_payment_status='Paid'
+        FROM inserted
+        WHERE packages.package_id= inserted.package_id and packages.user_id=inserted.user_id
+
+        UPDATE payments 
+        set payments.payment_status='Paid'
+        from inserted
+        where payments.payment_id=inserted.payment_id and payments.package_id=inserted.package_id
+        commit 
+        end try 
+        begin CATCH
+        ROLLBACK;
+        THROW
+        end catch 
+    END
+GO
+
+-------------------
+
+drop procedure if exists assign_traveller_to_pack
+go 
+create PROCEDURE assign_traveller_to_pack (@travuserid VARCHAR(100) ,@travid int, @packid int ) 
+AS
+    BEGIN
+        begin try 
+        begin TRANSACTION
+            UPDATE packages 
+            set packages.traveller_id = @travid,
+                packages.traveller_user_id =@travuserid,
+                packages.package_delivery_status='Traveller Assigned'
+            where packages.package_id = @packid
+
+            UPDATE payments 
+            set payments.traveller_id = @travid
+            where payments.package_id = @packid
+        commit 
+        end try 
+        begin CATCH
+        ROLLBACK;
+        THROW
+        end catch 
+    END
+GO
+
+--------------------------------------
+dROP TRIGGER IF EXISTS updates_hist_table
+GO
+CREATE TRIGGER updates_hist_table on packages 
+after  INSERT, update 
+AS
+    BEGIN
+        begin try 
+        begin TRANSACTION
+                declare @userid VARCHAR(60)
+                DECLARE @packid int 
+                declare @travid int 
+                declare @delvstatus VARCHAR(40)
+
+            select  @userid = inserted.user_id , @packid = inserted.package_id, 
+                    @travid = inserted.traveller_id, @delvstatus= inserted.package_delivery_status
+            from inserted 
+                
+            insert into history (user_id,package_id,delivery_status,traveller_id)
+            values (@userid,@packid,@delvstatus,@travid)
+
+        commit 
+        end try 
+        begin CATCH
+        ROLLBACK;
+        THROW
+        end catch 
+    END
+GO
+
+------------------------------
+
+drop procedure if exists total_history_of_user
+go 
+create PROCEDURE total_history_of_user (@userid VARCHAR(60)) 
+as  
+    BEGIN
+        begin try 
+        begin TRANSACTION
+        select u.user_full_name as Sender_name , p.package_id, p.recipient_full_name,
+                        t.user_full_name as Traveller_name ,p.sender_phone_number,p.recipient_phone_number,
+                        p.package_payment_status,p.package_delivery_status, pt.package_weight,
+                        l.street+l.apartment+l.landmarks+l.city+l.zipcode+l.state_code as Pick_up_address,
+                        ll.street+ll.apartment+ll.landmarks+ll.city+ll.zipcode+ll.state_code as drop_up_addres 
+        from packages p
+        JOIN users u on u.user_id =p.user_id 
+            join users t on t.user_id =p.traveller_user_id 
+               join locations l on l.address_id = p.package_pickup_address_id
+                join locations ll on ll.address_id = p.package_delivery_address_id
+                   join package_type pt on pt.package_type_id = p.package_type_id
+                where p.user_id = @userid
+        commit 
+        end try 
+        begin CATCH
+        ROLLBACK;
+        THROW
+        end catch 
+    END
+GO
+
+-------------------------------
+
+drop view if exists total_history_of_users_view
+go 
+create view total_history_of_users_view
+as  
+        select u.user_full_name as Sender_name , p.package_id, p.recipient_full_name,
+                        t.user_full_name as Traveller_name ,p.sender_phone_number,p.recipient_phone_number,
+                        p.package_payment_status,p.package_delivery_status, pt.package_weight,
+                        l.street+l.apartment+l.landmarks+l.city+l.zipcode+l.state_code as Pick_up_address,
+                        ll.street+ll.apartment+ll.landmarks+ll.city+ll.zipcode+ll.state_code as drop_up_addres 
+        from packages p
+        JOIN users u on u.user_id =p.user_id 
+            join users t on t.user_id =p.traveller_user_id 
+               join locations l on l.address_id = p.package_pickup_address_id
+                join locations ll on ll.address_id = p.package_delivery_address_id
+                   join package_type pt on pt.package_type_id = p.package_type_id
+    
+GO
+
+------------------------
+
+drop procedure if exists changedelivery_status_intransit
+go 
+create PROCEDURE changedelivery_status_intransit  (@packaid int)
+AS
+    BEGIN
+            UPDATE packages 
+            set packages.package_delivery_status='In Transit'
+            where packages.package_id = @packaid
+    END
+GO
+----------------------------
+
+drop procedure if exists changedelivery_status_deliverd
+go 
+create PROCEDURE changedelivery_status_deliverd  (@packaid int)
+AS
+    BEGIN
+            UPDATE packages 
+            set packages.package_delivery_status='Delivered'
+            where packages.package_id = @packaid
+    END
+GO
+
+------------------------
+
+dROP TRIGGER IF EXISTS payment_pack_defualt_values 
+GO
+CREATE TRIGGER payment_pack_defualt_values on packages 
+after  INSERT 
+AS
+    BEGIN
+        begin try 
+        begin TRANSACTION
+
+        UPDATE packages 
+        set packages.package_delivery_status='Pending',
+            packages.package_payment_status='Pending'
+        FROM inserted
+        WHERE packages.user_id=inserted.user_id
+
+        commit 
+        end try 
+        begin CATCH
+        ROLLBACK;
+        THROW
+        end catch 
+    END
+GO
+
+
+----------------------------------
+
+
+dROP TRIGGER IF EXISTS payment_pack_defualt_values 
+GO
+CREATE TRIGGER payment_pack_defualt_values on packages 
+after  INSERT ,UPDATE
+AS
+    BEGIN
+        begin try 
+        begin TRANSACTION
+        WAITFOR delay '00:19:00'
+        UPDATE packages 
+        set packages.package_delivery_status='Cancelled',
+            packages.package_payment_status='Cancelled'
+        FROM inserted
+        WHERE packages.user_id=inserted.user_id and packages.package_delivery_status='Pending'
+
+        commit 
+        end try 
+        begin CATCH
+        ROLLBACK;
+        THROW
+        end catch 
+    END
+GO
